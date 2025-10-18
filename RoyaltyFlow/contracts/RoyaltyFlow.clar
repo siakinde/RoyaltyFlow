@@ -287,6 +287,59 @@
   )
 )
 
+;; Advanced batch revenue distribution with detailed tracking and multi-content support
+;; This function allows for efficient processing of revenue across multiple streams
+;; and provides comprehensive audit trail for tax and accounting purposes
+(define-public (batch-distribute-revenue-advanced
+  (content-id (string-ascii 64))
+  (revenue-sources (list 5 { source: (string-ascii 32), amount: uint, timestamp: uint })))
+  (let
+    (
+      (content (unwrap! (map-get? content-registry { content-id: content-id }) err-content-not-found))
+      (count-data (unwrap! (map-get? stakeholder-count { content-id: content-id }) err-content-not-found))
+      (stakeholder-total (get count count-data))
+    )
+    ;; Security validations
+    (asserts! (get is-locked content) err-content-locked)
+    (asserts! (> stakeholder-total u0) err-no-stakeholders)
+    
+    ;; Process each revenue source in the batch
+    (let
+      (
+        (total-batch-amount (fold sum-revenue-amounts revenue-sources u0))
+      )
+      ;; Validate total amount
+      (asserts! (> total-batch-amount u0) err-zero-amount)
+      
+      ;; Distribute proportionally to all stakeholders
+      (asserts! 
+        (get success (fold distribute-revenue-to-stakeholder 
+          (list u0 u1 u2 u3 u4 u5 u6 u7 u8 u9) 
+          { content-id: content-id, amount: total-batch-amount, max: stakeholder-total, success: true }))
+        err-invalid-stakeholder)
+      
+      ;; Update content metadata with batch information
+      (map-set content-registry
+        { content-id: content-id }
+        (merge content { 
+          total-revenue: (+ (get total-revenue content) total-batch-amount)
+        })
+      )
+      
+      ;; Update global statistics
+      (var-set total-revenue-distributed (+ (var-get total-revenue-distributed) total-batch-amount))
+      
+      ;; Return detailed summary for transparency
+      (ok {
+        total-distributed: total-batch-amount,
+        stakeholder-count: stakeholder-total,
+        revenue-sources-processed: (len revenue-sources),
+        content-lifetime-revenue: (+ (get total-revenue content) total-batch-amount)
+      })
+    )
+  )
+)
+
 ;; Helper function to sum revenue amounts from multiple sources
 (define-private (sum-revenue-amounts 
   (revenue-source { source: (string-ascii 32), amount: uint, timestamp: uint })
